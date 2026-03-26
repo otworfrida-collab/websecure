@@ -23,11 +23,9 @@ scheduler = APScheduler()
 
 def create_app():
     """Application factory pattern."""
-    # Point template and static folders to project root (one level above this package)
-    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     app = Flask(__name__,
-                template_folder=os.path.join(root_dir, 'templates'),
-                static_folder=os.path.join(root_dir, 'app', 'static'))
+                template_folder='templates',
+                static_folder='app/static')
 
     # ── Configuration ─────────────────────────────────────────────────────────
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-change-me')
