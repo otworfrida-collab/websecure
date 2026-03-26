@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}Add Website — WebSecure{% endblock %}
+{% block topbar_title %}websites / add{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Add Website</h1>
+  <p>Enter the URL of a website you own or manage to start monitoring it</p>
+</div>
+
+<div class="row">
+  <div class="col-lg-6">
+    <div class="ws-card">
+      <form method="POST">
+        <div class="mb-4">
+          <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:8px">
+            Website URL <span style="color:#ef4444">*</span>
+          </label>
+          <input type="url" name="url" class="form-control"
+                 style="background:#0d1526;border:1px solid var(--border);color:var(--text);border-radius:8px;padding:11px 14px;font-family:var(--font-mono);font-size:14px"
+                 placeholder="https://example.com" required>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px">
+            Enter the full URL including https://
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:8px">
+            Label (optional)
+          </label>
+          <input type="text" name="label" class="form-control"
+                 style="background:#0d1526;border:1px solid var(--border);color:var(--text);border-radius:8px;padding:11px 14px;font-size:14px"
+                 placeholder="My Business Site">
+          <div style="font-size:11px;color:var(--muted);margin-top:6px">
+            A friendly name for this website
+          </div>
+        </div>
+
+        <div class="mb-4" style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
+          <div class="d-flex align-items-center gap-3">
+            <input type="checkbox" name="auto_scan" id="auto_scan" checked
+                   style="accent-color:var(--accent);width:16px;height:16px">
+            <div>
+              <label for="auto_scan" style="font-size:14px;font-weight:600;cursor:pointer">Enable Automatic Scanning</label>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px">
+                Automatically scan this website every 24 hours and alert you of new vulnerabilities
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex gap-3">
+          <button type="submit" class="btn-accent">
+            <i class="bi bi-plus-lg"></i> Add Website
+          </button>
+          <a href="{{ url_for('websites.list_websites') }}" class="btn-ghost">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-lg-5 offset-lg-1">
+    <div class="ws-card" style="border-left:3px solid var(--accent)">
+      <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">
+        <i class="bi bi-info-circle" style="color:var(--accent)"></i> What We Check
+      </h3>
+      <div style="font-size:13px;color:var(--muted);line-height:1.8">
+        <div style="display:flex;gap:8px;margin-bottom:6px"><i class="bi bi-check2 text-success"></i> SSL/HTTPS certificate validity</div>
+        <div style="display:flex;gap:8px;margin-bottom:6px"><i class="bi bi-check2 text-success"></i> HTTP security headers (CSP, HSTS, etc.)</div>
+        <div style="display:flex;gap:8px;margin-bottom:6px"><i class="bi bi-check2 text-success"></i> Exposed sensitive directories</div>
+        <div style="display:flex;gap:8px;margin-bottom:6px"><i class="bi bi-check2 text-success"></i> Open web server ports</div>
+        <div style="display:flex;gap:8px;margin-bottom:6px"><i class="bi bi-check2 text-success"></i> SQL injection indicators</div>
+        <div style="display:flex;gap:8px;margin-bottom:6px"><i class="bi bi-check2 text-success"></i> Cross-site scripting (XSS)</div>
+        <div style="display:flex;gap:8px;margin-bottom:6px"><i class="bi bi-check2 text-success"></i> Insecure cookies & login forms</div>
+        <div style="display:flex;gap:8px"><i class="bi bi-check2 text-success"></i> Server information leakage</div>
+      </div>
+
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);font-size:12px;color:var(--muted)">
+        <i class="bi bi-shield-lock" style="color:var(--accent)"></i>
+        Only scan websites you own or have permission to test.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

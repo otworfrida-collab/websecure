@@ -1,0 +1,286 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard — WebSecure{% endblock %}
+{% block topbar_title %}dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Security Dashboard</h1>
+  <p>Overview of your monitored websites and vulnerability status</p>
+</div>
+
+<!-- ── Stat row ─────────────────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-xl-3">
+    <div class="stat-card" style="--stat-color:#3b82f6;--stat-bg:rgba(59,130,246,0.1)">
+      <div class="stat-icon"><i class="bi bi-globe2"></i></div>
+      <div>
+        <div class="stat-value">{{ websites|length }}</div>
+        <div class="stat-label">Monitored Websites</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card" style="--stat-color:#8b5cf6;--stat-bg:rgba(139,92,246,0.1)">
+      <div class="stat-icon"><i class="bi bi-search"></i></div>
+      <div>
+        <div class="stat-value">{{ total_scans }}</div>
+        <div class="stat-label">Total Scans Run</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card" style="--stat-color:#f59e0b;--stat-bg:rgba(245,158,11,0.1)">
+      <div class="stat-icon"><i class="bi bi-bug"></i></div>
+      <div>
+        <div class="stat-value">{{ total_vulns }}</div>
+        <div class="stat-label">Vulnerabilities Found</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card" style="--stat-color:#ef4444;--stat-bg:rgba(239,68,68,0.1)">
+      <div class="stat-icon"><i class="bi bi-exclamation-octagon"></i></div>
+      <div>
+        <div class="stat-value">{{ high_vulns }}</div>
+        <div class="stat-label">High Severity Issues</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Main grid ─────────────────────────────────────────────────────────── -->
+<div class="row g-4">
+
+  <!-- Left: Websites & recent scans -->
+  <div class="col-xl-8">
+
+    <!-- Websites -->
+    <div class="ws-card mb-4">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h2 style="font-size:15px;font-weight:700">Your Websites</h2>
+        <a href="{{ url_for('websites.add_website') }}" class="btn-ghost" style="font-size:12px;padding:6px 12px">
+          <i class="bi bi-plus"></i> Add
+        </a>
+      </div>
+
+      {% if websites %}
+      <table class="ws-table">
+        <thead>
+          <tr>
+            <th>URL</th>
+            <th>Last Scan</th>
+            <th>Risk Score</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for site in websites %}
+          {% set latest = site.latest_scan() %}
+          <tr>
+            <td>
+              <div style="font-size:13px;font-weight:600;color:var(--text)">{{ site.label or site.url }}</div>
+              <div style="font-size:11px;color:var(--muted);font-family:var(--font-mono)">{{ site.url }}</div>
+            </td>
+            <td>
+              {% if latest %}
+              <div style="font-size:12px;color:var(--text)">{{ latest.scan_date.strftime('%b %d, %Y') }}</div>
+              <span class="status-pill status-{{ latest.status }}">{{ latest.status }}</span>
+              {% else %}
+              <span style="color:var(--muted);font-size:12px">Never scanned</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if latest %}
+              {% set score = latest.risk_score %}
+              {% set color = '#ef4444' if score >= 60 else '#f59e0b' if score >= 30 else '#22c55e' %}
+              <div style="font-family:var(--font-mono);font-size:13px;font-weight:700;color:{{ color }}">
+                {{ '%.0f'|format(score) }}
+                <span style="font-size:10px;color:var(--muted);font-weight:400">/100</span>
+              </div>
+              <div class="risk-bar-wrap mt-1" style="width:80px">
+                <div class="risk-bar" style="width:{{ score }}%;background:{{ color }}"></div>
+              </div>
+              {% else %}
+              <span style="color:var(--muted);font-size:12px">—</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="d-flex gap-2 flex-wrap">
+                <form method="POST" action="{{ url_for('scans.trigger_scan', site_id=site.id) }}">
+                  <button type="submit" class="btn-ghost" style="font-size:11px;padding:5px 10px">
+                    <i class="bi bi-play-fill"></i> Scan
+                  </button>
+                </form>
+                {% if latest %}
+                <a href="{{ url_for('scans.view_scan', scan_id=latest.id) }}" class="btn-ghost" style="font-size:11px;padding:5px 10px">
+                  <i class="bi bi-eye"></i> Report
+                </a>
+                {% endif %}
+                <a href="{{ url_for('scans.scan_history', site_id=site.id) }}" class="btn-ghost" style="font-size:11px;padding:5px 10px">
+                  <i class="bi bi-clock-history"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty-state">
+        <i class="bi bi-globe2"></i>
+        <h3>No websites added yet</h3>
+        <p>Add your first website to start scanning for vulnerabilities.</p>
+        <a href="{{ url_for('websites.add_website') }}" class="btn-accent mt-3">
+          <i class="bi bi-plus-lg"></i> Add Website
+        </a>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Recent Scans -->
+    {% if recent_scans %}
+    <div class="ws-card">
+      <h2 style="font-size:15px;font-weight:700;margin-bottom:16px">Recent Scans</h2>
+      <table class="ws-table">
+        <thead>
+          <tr><th>Website</th><th>Date</th><th>Issues</th><th>Score</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for scan in recent_scans %}
+          <tr>
+            <td style="font-family:var(--font-mono);font-size:12px;color:var(--accent2)">
+              {{ scan.website.url[:45] }}{% if scan.website.url|length > 45 %}…{% endif %}
+            </td>
+            <td style="font-size:12px;color:var(--muted)">{{ scan.scan_date.strftime('%b %d %H:%M') }}</td>
+            <td>
+              {% set c = scan.vuln_counts() %}
+              <span class="risk-badge badge-high me-1">{{ c.High }} H</span>
+              <span class="risk-badge badge-medium me-1">{{ c.Medium }} M</span>
+              <span class="risk-badge badge-low">{{ c.Low }} L</span>
+            </td>
+            <td style="font-family:var(--font-mono);font-size:13px;font-weight:700;
+              color:{{ '#ef4444' if scan.risk_score >= 60 else '#f59e0b' if scan.risk_score >= 30 else '#22c55e' }}">
+              {{ '%.0f'|format(scan.risk_score) }}
+            </td>
+            <td>
+              <a href="{{ url_for('scans.view_scan', scan_id=scan.id) }}" class="btn-ghost" style="font-size:11px;padding:5px 10px">View</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Right: Charts & Alerts -->
+  <div class="col-xl-4">
+
+    <!-- Vuln distribution chart -->
+    <div class="ws-card mb-4">
+      <h2 style="font-size:15px;font-weight:700;margin-bottom:16px">
+        <i class="bi bi-pie-chart" style="color:var(--accent)"></i> Vulnerability Distribution
+      </h2>
+      {% if total_vulns > 0 %}
+      <div style="max-width:220px;margin:0 auto">
+        <canvas id="vulnChart"></canvas>
+      </div>
+      <div class="d-flex justify-content-center gap-3 mt-3">
+        <div class="text-center">
+          <div style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:#ef4444">{{ vuln_counts.High }}</div>
+          <div style="font-size:11px;color:var(--muted)">High</div>
+        </div>
+        <div class="text-center">
+          <div style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:#f59e0b">{{ vuln_counts.Medium }}</div>
+          <div style="font-size:11px;color:var(--muted)">Medium</div>
+        </div>
+        <div class="text-center">
+          <div style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:#22c55e">{{ vuln_counts.Low }}</div>
+          <div style="font-size:11px;color:var(--muted)">Low</div>
+        </div>
+      </div>
+      {% else %}
+      <div class="empty-state" style="padding:24px">
+        <i class="bi bi-shield-check" style="font-size:32px;color:#22c55e"></i>
+        <p style="font-size:13px;margin-top:8px">No vulnerabilities detected yet</p>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Alerts -->
+    <div class="ws-card">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h2 style="font-size:15px;font-weight:700">
+          <i class="bi bi-bell" style="color:var(--accent)"></i> Alerts
+          {% if unread_alerts > 0 %}
+          <span style="background:#ef4444;color:white;font-size:10px;padding:2px 6px;border-radius:10px;margin-left:6px">{{ unread_alerts }}</span>
+          {% endif %}
+        </h2>
+        {% if unread_alerts > 0 %}
+        <form method="POST" action="{{ url_for('scans.mark_alerts_read') }}">
+          <button type="submit" style="background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;text-decoration:underline">
+            Mark all read
+          </button>
+        </form>
+        {% endif %}
+      </div>
+
+      {% if alerts %}
+      {% for alert in alerts %}
+      <div style="padding:12px 0;border-bottom:1px solid var(--border);{% if loop.last %}border-bottom:none{% endif %}">
+        <div style="font-size:12px;color:var(--text);line-height:1.5;
+          opacity:{% if alert.is_read %}0.6{% else %}1{% endif %}">
+          {% if not alert.is_read %}
+          <span style="display:inline-block;width:6px;height:6px;background:#ef4444;border-radius:50%;margin-right:6px;vertical-align:middle"></span>
+          {% endif %}
+          {{ alert.message }}
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">
+          {{ alert.created_at.strftime('%b %d, %H:%M') }}
+        </div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <div class="empty-state" style="padding:20px">
+        <i class="bi bi-bell-slash" style="font-size:28px"></i>
+        <p style="font-size:13px;margin-top:8px">No alerts yet</p>
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if total_vulns > 0 %}
+<script>
+const ctx = document.getElementById('vulnChart');
+new Chart(ctx, {
+  type: 'doughnut',
+  data: {
+    labels: ['High', 'Medium', 'Low'],
+    datasets: [{
+      data: [{{ vuln_counts.High }}, {{ vuln_counts.Medium }}, {{ vuln_counts.Low }}],
+      backgroundColor: ['#ef4444', '#f59e0b', '#22c55e'],
+      borderWidth: 0,
+      hoverOffset: 4,
+    }]
+  },
+  options: {
+    cutout: '70%',
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#1a2235',
+        titleColor: '#e2e8f0',
+        bodyColor: '#94a3b8',
+        borderColor: '#1e2d45',
+        borderWidth: 1,
+      }
+    }
+  }
+});
+</script>
+{% endif %}
+{% endblock %}

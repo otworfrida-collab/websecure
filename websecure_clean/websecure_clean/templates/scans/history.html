@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block title %}Scan History — WebSecure{% endblock %}
+{% block topbar_title %}scans / history{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start">
+  <div>
+    <h1>Scan History</h1>
+    <p style="font-family:var(--font-mono);font-size:12px;color:var(--muted)">{{ site.url }}</p>
+  </div>
+  <form method="POST" action="{{ url_for('scans.trigger_scan', site_id=site.id) }}">
+    <button type="submit" class="btn-accent">
+      <i class="bi bi-play-fill"></i> Scan Now
+    </button>
+  </form>
+</div>
+
+<div class="ws-card">
+  {% if scans %}
+  <table class="ws-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Date</th>
+        <th>Status</th>
+        <th>Duration</th>
+        <th>Issues (H/M/L)</th>
+        <th>Risk Score</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for scan in scans %}
+      {% set c = scan.vuln_counts() %}
+      <tr>
+        <td style="font-family:var(--font-mono);color:var(--muted);font-size:12px">#{{ scan.id }}</td>
+        <td style="font-size:13px">{{ scan.scan_date.strftime('%b %d, %Y %H:%M') }}</td>
+        <td><span class="status-pill status-{{ scan.status }}">{{ scan.status }}</span></td>
+        <td style="font-size:12px;color:var(--muted);font-family:var(--font-mono)">{{ '%.1f'|format(scan.duration_secs) }}s</td>
+        <td>
+          <span class="risk-badge badge-high me-1">{{ c.High }}</span>
+          <span class="risk-badge badge-medium me-1">{{ c.Medium }}</span>
+          <span class="risk-badge badge-low">{{ c.Low }}</span>
+        </td>
+        <td>
+          {% set score = scan.risk_score %}
+          <span style="font-family:var(--font-mono);font-size:14px;font-weight:700;
+            color:{{ '#ef4444' if score >= 60 else '#f59e0b' if score >= 30 else '#22c55e' }}">
+            {{ '%.0f'|format(score) }}
+          </span>
+        </td>
+        <td>
+          <div class="d-flex gap-2">
+            <a href="{{ url_for('scans.view_scan', scan_id=scan.id) }}" class="btn-ghost" style="font-size:11px;padding:5px 10px">
+              <i class="bi bi-eye"></i> View
+            </a>
+            <a href="{{ url_for('reports.download_report', scan_id=scan.id) }}" class="btn-ghost" style="font-size:11px;padding:5px 10px">
+              <i class="bi bi-file-pdf"></i> PDF
+            </a>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state">
+    <i class="bi bi-clock-history"></i>
+    <h3>No scans yet</h3>
+    <p>Run your first scan to see results here.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

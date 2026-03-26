@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% block title %}My Websites — WebSecure{% endblock %}
+{% block topbar_title %}websites{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start">
+  <div>
+    <h1>Monitored Websites</h1>
+    <p>Manage and scan your registered websites</p>
+  </div>
+  <a href="{{ url_for('websites.add_website') }}" class="btn-accent">
+    <i class="bi bi-plus-lg"></i> Add Website
+  </a>
+</div>
+
+{% if websites %}
+<div class="ws-card">
+  <table class="ws-table">
+    <thead>
+      <tr>
+        <th>Website</th>
+        <th>Added</th>
+        <th>Auto-Scan</th>
+        <th>Last Scan</th>
+        <th>Risk</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for site in websites %}
+      {% set latest = site.latest_scan() %}
+      <tr>
+        <td>
+          <div style="font-weight:600">{{ site.label or site.url }}</div>
+          <a href="{{ site.url }}" target="_blank" rel="noopener"
+             style="font-size:11px;color:var(--muted);font-family:var(--font-mono)">
+            {{ site.url }} <i class="bi bi-box-arrow-up-right" style="font-size:9px"></i>
+          </a>
+        </td>
+        <td style="font-size:12px;color:var(--muted)">{{ site.date_added.strftime('%b %d, %Y') }}</td>
+        <td>
+          <form method="POST" action="{{ url_for('websites.toggle_auto_scan', site_id=site.id) }}" style="display:inline">
+            <button type="submit" style="background:none;border:none;cursor:pointer;padding:0">
+              {% if site.auto_scan %}
+              <span style="background:rgba(34,197,94,0.12);color:#22c55e;font-size:11px;padding:3px 10px;border-radius:20px;border:1px solid rgba(34,197,94,0.3)">
+                <i class="bi bi-check-circle"></i> On
+              </span>
+              {% else %}
+              <span style="background:rgba(100,116,139,0.12);color:#94a3b8;font-size:11px;padding:3px 10px;border-radius:20px;border:1px solid rgba(100,116,139,0.3)">
+                <i class="bi bi-x-circle"></i> Off
+              </span>
+              {% endif %}
+            </button>
+          </form>
+        </td>
+        <td>
+          {% if latest %}
+          <div style="font-size:12px">{{ latest.scan_date.strftime('%b %d, %H:%M') }}</div>
+          <span class="status-pill status-{{ latest.status }}">{{ latest.status }}</span>
+          {% else %}
+          <span style="color:var(--muted);font-size:12px">Never</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if latest %}
+          {% set score = latest.risk_score %}
+          {% set color = '#ef4444' if score >= 60 else '#f59e0b' if score >= 30 else '#22c55e' %}
+          <span style="font-family:var(--font-mono);font-size:14px;font-weight:700;color:{{ color }}">
+            {{ '%.0f'|format(score) }}
+          </span>
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          <div class="d-flex gap-2 flex-wrap">
+            <form method="POST" action="{{ url_for('scans.trigger_scan', site_id=site.id) }}">
+              <button type="submit" class="btn-ghost" style="font-size:11px;padding:5px 10px">
+                <i class="bi bi-play-fill"></i> Scan Now
+              </button>
+            </form>
+            {% if latest %}
+            <a href="{{ url_for('scans.view_scan', scan_id=latest.id) }}" class="btn-ghost" style="font-size:11px;padding:5px 10px">
+              <i class="bi bi-file-text"></i> Report
+            </a>
+            <a href="{{ url_for('scans.scan_history', site_id=site.id) }}" class="btn-ghost" style="font-size:11px;padding:5px 10px">
+              <i class="bi bi-clock-history"></i>
+            </a>
+            {% endif %}
+            <form method="POST" action="{{ url_for('websites.delete_website', site_id=site.id) }}"
+                  onsubmit="return confirm('Remove {{ site.url }} and all its scan data?')">
+              <button type="submit" class="btn-danger-ghost">
+                <i class="bi bi-trash3"></i>
+              </button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% else %}
+<div class="ws-card">
+  <div class="empty-state">
+    <i class="bi bi-globe2"></i>
+    <h3>No websites added yet</h3>
+    <p>Add your first website URL to start scanning for security vulnerabilities.</p>
+    <a href="{{ url_for('websites.add_website') }}" class="btn-accent mt-3">
+      <i class="bi bi-plus-lg"></i> Add Your First Website
+    </a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

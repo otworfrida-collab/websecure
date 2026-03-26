@@ -1,0 +1,179 @@
+{% extends 'base.html' %}
+{% block title %}Scan Report — WebSecure{% endblock %}
+{% block topbar_title %}scans / report #{{ scan.id }}{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:4px">
+      <a href="{{ url_for('websites.list_websites') }}" style="color:var(--muted);text-decoration:none">Websites</a>
+      <span style="margin:0 6px">/</span>
+      <span>Scan Report</span>
+    </div>
+    <h1 style="font-size:20px;font-weight:700">{{ site.label or site.url }}</h1>
+    <div style="font-family:var(--font-mono);font-size:12px;color:var(--muted);margin-top:4px">
+      {{ site.url }} &mdash; {{ scan.scan_date.strftime('%B %d, %Y at %H:%M UTC') }}
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('reports.download_report', scan_id=scan.id) }}" class="btn-accent">
+      <i class="bi bi-file-pdf"></i> Download PDF
+    </a>
+    <form method="POST" action="{{ url_for('scans.trigger_scan', site_id=site.id) }}">
+      <button type="submit" class="btn-ghost">
+        <i class="bi bi-arrow-repeat"></i> Re-scan
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Risk score + summary row -->
+<div class="row g-3 mb-4">
+  <!-- Risk score gauge -->
+  <div class="col-md-3">
+    <div class="ws-card text-center" style="padding:28px">
+      {% set score = scan.risk_score %}
+      {% if score >= 60 %}{% set sc = '#ef4444' %}{% set sl = 'High Risk' %}
+      {% elif score >= 30 %}{% set sc = '#f59e0b' %}{% set sl = 'Medium Risk' %}
+      {% else %}{% set sc = '#22c55e' %}{% set sl = 'Low Risk' %}{% endif %}
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Risk Score</div>
+      <div style="font-family:var(--font-mono);font-size:52px;font-weight:700;color:{{ sc }};line-height:1">
+        {{ '%.0f'|format(score) }}
+      </div>
+      <div style="color:{{ sc }};font-size:13px;font-weight:600;margin-top:4px">{{ sl }}</div>
+      <div class="risk-bar-wrap mt-3">
+        <div class="risk-bar" style="width:{{ score }}%;background:{{ sc }}"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vuln counts -->
+  <div class="col-md-3">
+    <div class="ws-card" style="height:100%">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">Findings</div>
+      <div class="d-flex flex-column gap-3">
+        <div class="d-flex align-items-center justify-content-between">
+          <span class="risk-badge badge-high">High</span>
+          <span style="font-family:var(--font-mono);font-size:20px;font-weight:700;color:#ef4444">{{ counts.High }}</span>
+        </div>
+        <div class="d-flex align-items-center justify-content-between">
+          <span class="risk-badge badge-medium">Medium</span>
+          <span style="font-family:var(--font-mono);font-size:20px;font-weight:700;color:#f59e0b">{{ counts.Medium }}</span>
+        </div>
+        <div class="d-flex align-items-center justify-content-between">
+          <span class="risk-badge badge-low">Low</span>
+          <span style="font-family:var(--font-mono);font-size:20px;font-weight:700;color:#22c55e">{{ counts.Low }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Meta info -->
+  <div class="col-md-6">
+    <div class="ws-card" style="height:100%">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">Scan Details</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
+        <div><span style="color:var(--muted)">Status</span><br>
+          <span class="status-pill status-{{ scan.status }}" style="margin-top:4px;display:inline-block">{{ scan.status }}</span>
+        </div>
+        <div><span style="color:var(--muted)">Duration</span><br>
+          <span style="font-family:var(--font-mono);font-weight:600">{{ '%.1f'|format(scan.duration_secs) }}s</span>
+        </div>
+        <div><span style="color:var(--muted)">Total Issues</span><br>
+          <span style="font-family:var(--font-mono);font-weight:600">{{ scan.total_vulns }}</span>
+        </div>
+        <div><span style="color:var(--muted)">Scan ID</span><br>
+          <span style="font-family:var(--font-mono);font-weight:600">#{{ scan.id }}</span>
+        </div>
+      </div>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);font-size:12px;color:var(--muted)">
+        {{ scan.result_summary }}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Vulnerability list -->
+<div class="ws-card">
+  <h2 style="font-size:16px;font-weight:700;margin-bottom:20px">
+    Vulnerability Findings
+  </h2>
+
+  {% if vulns %}
+  {% for vuln in vulns %}
+  {% if vuln.risk_level == 'High' %}{% set vc = '#ef4444' %}{% set vb = 'badge-high' %}
+  {% elif vuln.risk_level == 'Medium' %}{% set vc = '#f59e0b' %}{% set vb = 'badge-medium' %}
+  {% else %}{% set vc = '#22c55e' %}{% set vb = 'badge-low' %}{% endif %}
+
+  <div style="border:1px solid var(--border);border-left:3px solid {{ vc }};border-radius:10px;margin-bottom:12px;overflow:hidden">
+    <!-- Finding header -->
+    <div style="background:var(--card2);padding:14px 18px;display:flex;align-items:center;gap:12px;cursor:pointer"
+         onclick="toggleFinding({{ vuln.id }})">
+      <span class="risk-badge {{ vb }}">{{ vuln.risk_level }}</span>
+      <span style="font-size:14px;font-weight:600;flex:1">{{ vuln.vulnerability_type }}</span>
+      <span style="font-family:var(--font-mono);font-size:12px;color:{{ vc }};margin-right:8px">
+        {{ vuln.severity_score }}/10
+      </span>
+      <i class="bi bi-chevron-down" id="chevron-{{ vuln.id }}" style="color:var(--muted);transition:transform 0.2s"></i>
+    </div>
+
+    <!-- Finding body (collapsible) -->
+    <div id="finding-{{ vuln.id }}" style="display:none;padding:18px">
+      <div class="row g-4">
+        <div class="col-md-6">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Description</div>
+          <p style="font-size:13px;color:var(--text);line-height:1.6;margin:0">{{ vuln.description }}</p>
+        </div>
+        <div class="col-md-6">
+          <div style="font-size:11px;font-weight:700;color:#22c55e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">
+            <i class="bi bi-wrench"></i> Recommendation
+          </div>
+          <p style="font-size:13px;color:var(--text);line-height:1.6;margin:0">{{ vuln.recommendation }}</p>
+        </div>
+        {% if vuln.evidence %}
+        <div class="col-12">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Evidence</div>
+          <code style="display:block;background:#0a0f1e;border:1px solid var(--border);border-radius:6px;padding:10px 14px;font-size:12px;color:#93c5fd;white-space:pre-wrap;word-break:break-all">{{ vuln.evidence }}</code>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+  {% else %}
+  <div class="empty-state">
+    <i class="bi bi-shield-check" style="color:#22c55e"></i>
+    <h3 style="color:#22c55e">All Clear!</h3>
+    <p>No vulnerabilities detected in this scan.</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- History link -->
+<div class="mt-3 text-center">
+  <a href="{{ url_for('scans.scan_history', site_id=site.id) }}" class="btn-ghost">
+    <i class="bi bi-clock-history"></i> View Full Scan History
+  </a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleFinding(id) {
+  const body = document.getElementById('finding-' + id);
+  const chev = document.getElementById('chevron-' + id);
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  chev.style.transform = isOpen ? '' : 'rotate(180deg)';
+}
+
+// Open high severity findings by default
+{% for vuln in vulns %}
+{% if vuln.risk_level == 'High' %}
+toggleFinding({{ vuln.id }});
+{% endif %}
+{% endfor %}
+</script>
+{% endblock %}

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}WebSecure{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root {
+      --bg:        #0a0f1e;
+      --sidebar:   #0d1526;
+      --card:      #111827;
+      --card2:     #1a2235;
+      --border:    #1e2d45;
+      --accent:    #3b82f6;
+      --accent2:   #60a5fa;
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --high:      #ef4444;
+      --medium:    #f59e0b;
+      --low:       #22c55e;
+      --font-mono: 'Space Mono', monospace;
+      --font-sans: 'DM Sans', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      display: flex;
+    }
+    .sidebar {
+      width: 240px; min-height: 100vh;
+      background: var(--sidebar);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      position: fixed; top: 0; left: 0;
+      z-index: 100; padding: 0 0 24px;
+    }
+    .sidebar-brand {
+      display: flex; align-items: center; gap: 10px;
+      padding: 24px 20px 20px;
+      border-bottom: 1px solid var(--border);
+      text-decoration: none;
+    }
+    .brand-icon {
+      width: 36px; height: 36px; background: var(--accent);
+      border-radius: 8px; display: flex; align-items: center;
+      justify-content: center; font-size: 18px; color: white;
+    }
+    .brand-name { font-family: var(--font-mono); font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: 0.5px; }
+    .brand-name span { color: var(--accent); }
+    .nav-section { padding: 20px 12px 8px; }
+    .nav-label { font-size: 10px; font-weight: 600; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; padding: 0 8px 8px; }
+    .nav-link {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 12px; border-radius: 8px;
+      color: var(--muted); font-size: 14px; font-weight: 500;
+      text-decoration: none; transition: all 0.15s ease; margin-bottom: 2px;
+    }
+    .nav-link:hover, .nav-link.active { background: rgba(59,130,246,0.12); color: var(--accent2); }
+    .nav-link.active { color: var(--accent); }
+    .nav-link i { font-size: 16px; width: 20px; text-align: center; }
+    .nav-badge { margin-left: auto; background: var(--high); color: white; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 10px; }
+    .sidebar-footer { margin-top: auto; padding: 16px 20px 0; border-top: 1px solid var(--border); }
+    .user-pill { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+    .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), #8b5cf6); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: white; }
+    .user-name { font-size: 13px; font-weight: 600; color: var(--text); }
+    .user-email { font-size: 11px; color: var(--muted); }
+    .main { margin-left: 240px; flex: 1; min-height: 100vh; display: flex; flex-direction: column; }
+    .topbar { height: 64px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 32px; background: var(--sidebar); position: sticky; top: 0; z-index: 50; }
+    .topbar-title { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--muted); }
+    .topbar-title span { color: var(--text); }
+    .content { padding: 32px; flex: 1; }
+    .ws-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
+    .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; display: flex; align-items: center; gap: 16px; position: relative; overflow: hidden; transition: border-color 0.2s; }
+    .stat-card:hover { border-color: var(--accent); }
+    .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--stat-color, var(--accent)); }
+    .stat-icon { width: 48px; height: 48px; border-radius: 10px; background: var(--stat-bg, rgba(59,130,246,0.12)); display: flex; align-items: center; justify-content: center; font-size: 22px; color: var(--stat-color, var(--accent)); flex-shrink: 0; }
+    .stat-value { font-family: var(--font-mono); font-size: 28px; font-weight: 700; line-height: 1; }
+    .stat-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .badge-high   { background: rgba(239,68,68,0.15);  color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+    .badge-medium { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
+    .badge-low    { background: rgba(34,197,94,0.15);  color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+    .risk-badge { font-size: 11px; font-weight: 700; font-family: var(--font-mono); padding: 3px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .btn-accent { background: var(--accent); color: white; border: none; font-weight: 600; font-size: 13px; padding: 9px 20px; border-radius: 8px; transition: all 0.15s; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; cursor: pointer; }
+    .btn-accent:hover { background: #2563eb; color: white; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59,130,246,0.3); }
+    .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); font-weight: 500; font-size: 13px; padding: 8px 16px; border-radius: 8px; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; cursor: pointer; }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent2); }
+    .btn-danger-ghost { background: transparent; color: var(--high); border: 1px solid rgba(239,68,68,0.3); font-size: 12px; padding: 6px 12px; border-radius: 6px; transition: all 0.15s; cursor: pointer; }
+    .btn-danger-ghost:hover { background: rgba(239,68,68,0.1); }
+    .ws-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+    .ws-table th { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--card); }
+    .ws-table td { padding: 14px 16px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+    .ws-table tr:last-child td { border-bottom: none; }
+    .ws-table tbody tr { transition: background 0.1s; }
+    .ws-table tbody tr:hover td { background: var(--card2); }
+    .flash-container { position: fixed; top: 80px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; max-width: 380px; }
+    .flash-msg { background: var(--card2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; font-size: 13px; display: flex; align-items: flex-start; gap: 10px; animation: slideIn 0.2s ease; }
+    .flash-msg.success { border-left: 3px solid var(--low); }
+    .flash-msg.danger  { border-left: 3px solid var(--high); }
+    .flash-msg.info    { border-left: 3px solid var(--accent); }
+    .flash-msg.warning { border-left: 3px solid var(--medium); }
+    @keyframes slideIn { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:none; } }
+    .risk-bar-wrap { background: var(--border); border-radius: 4px; height: 6px; overflow: hidden; }
+    .risk-bar { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+    .text-mono { font-family: var(--font-mono); }
+    .page-header { margin-bottom: 28px; }
+    .page-header h1 { font-size: 22px; font-weight: 700; }
+    .page-header p  { color: var(--muted); font-size: 14px; margin-top: 4px; }
+    .status-pill { font-size: 11px; font-weight: 600; font-family: var(--font-mono); padding: 3px 10px; border-radius: 20px; }
+    .status-done    { background: rgba(34,197,94,0.12);  color: #22c55e; }
+    .status-running { background: rgba(59,130,246,0.12); color: #3b82f6; }
+    .status-failed  { background: rgba(239,68,68,0.12);  color: #ef4444; }
+    .status-pending { background: rgba(100,116,139,0.12);color: #94a3b8; }
+    a { color: var(--accent2); }
+    a:hover { color: var(--accent); }
+    .empty-state { text-align: center; padding: 48px 24px; color: var(--muted); }
+    .empty-state i { font-size: 48px; margin-bottom: 16px; display: block; }
+    .empty-state h3 { font-size: 16px; color: var(--text); margin-bottom: 8px; }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+{% if current_user.is_authenticated %}
+<nav class="sidebar">
+  <a class="sidebar-brand" href="{{ url_for('dashboard.home') }}">
+    <div class="brand-icon"><i class="bi bi-shield-check"></i></div>
+    <div class="brand-name">Security<span>Web</span></div>
+  </a>
+  <div class="nav-section">
+    <div class="nav-label">Main</div>
+    <a href="{{ url_for('dashboard.home') }}"
+       class="nav-link {% if request.endpoint == 'dashboard.home' %}active{% endif %}">
+      <i class="bi bi-grid-1x2"></i> Dashboard
+      {% if unread_alert_count and unread_alert_count > 0 %}
+      <span class="nav-badge">{{ unread_alert_count }}</span>
+      {% endif %}
+    </a>
+    <a href="{{ url_for('websites.list_websites') }}"
+       class="nav-link {% if request.endpoint and 'websites' in request.endpoint %}active{% endif %}">
+      <i class="bi bi-globe2"></i> Websites
+    </a>
+    <a href="{{ url_for('websites.add_website') }}"
+       class="nav-link {% if request.endpoint == 'websites.add_website' %}active{% endif %}">
+      <i class="bi bi-plus-circle"></i> Add Website
+    </a>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">Account</div>
+    <a href="{{ url_for('auth.logout') }}" class="nav-link">
+      <i class="bi bi-box-arrow-right"></i> Sign Out
+    </a>
+  </div>
+  <div class="sidebar-footer">
+    <div class="user-pill">
+      <div class="user-avatar">{{ current_user.username[0].upper() }}</div>
+      <div>
+        <div class="user-name">{{ current_user.username }}</div>
+        <div class="user-email">{{ current_user.email[:24] }}{% if current_user.email|length > 24 %}…{% endif %}</div>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title">
+      websecure / <span>{% block topbar_title %}dashboard{% endblock %}</span>
+    </div>
+    <div class="ms-auto d-flex align-items-center gap-3">
+      <a href="{{ url_for('websites.add_website') }}" class="btn-accent" style="font-size:12px;padding:7px 14px">
+        <i class="bi bi-plus-lg"></i> Add Website
+      </a>
+    </div>
+  </div>
+
+  <div class="flash-container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}
+      <div class="flash-msg {{ cat }}">
+        <i class="bi {% if cat == 'success' %}bi-check-circle{% elif cat == 'danger' %}bi-exclamation-triangle{% else %}bi-info-circle{% endif %}" style="font-size:16px;margin-top:1px;flex-shrink:0"></i>
+        <span>{{ msg }}</span>
+        <button onclick="this.parentElement.remove()" style="margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer">×</button>
+      </div>
+      {% endfor %}
+    {% endwith %}
+  </div>
+
+  <div class="content">
+    {% block content %}{% endblock %}
+  </div>
+</div>
+
+{% else %}
+<div class="flash-container">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+    <div class="flash-msg {{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+</div>
+{% endif %}
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% block scripts %}{% endblock %}
+<script>
+  setTimeout(() => {
+    document.querySelectorAll('.flash-msg').forEach(el => {
+      el.style.transition = 'opacity 0.5s'; el.style.opacity = '0';
+      setTimeout(() => el.remove(), 500);
+    });
+  }, 5000);
+</script>
+</body>
+</html>
