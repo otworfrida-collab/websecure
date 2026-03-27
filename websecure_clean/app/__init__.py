@@ -4,33 +4,54 @@ Main application factory
 """
 
 import os
+from urllib.parse import urlparse
+
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_mail import Mail
 from flask_apscheduler import APScheduler
 from dotenv import load_dotenv
+from pymongo import MongoClient
 
 # Load environment variables
 load_dotenv()
 
 # Initialize extensions
-db = SQLAlchemy()
 login_manager = LoginManager()
 mail = Mail()
 scheduler = APScheduler()
+mongo_client = None
+mongo_db = None
+
+
+def _get_default_db_name(mongo_uri: str) -> str:
+    parsed = urlparse(mongo_uri)
+    if parsed.path and parsed.path != '/':
+        return parsed.path.lstrip('/')
+    return os.getenv('MONGODB_DB', 'websecure')
+
+
+def init_mongo(app: Flask):
+    global mongo_client, mongo_db
+
+    mongo_uri = os.getenv('MONGODB_URI', 'mongodb://localhost:27017/websecure')
+    db_name = os.getenv('MONGODB_DB') or _get_default_db_name(mongo_uri)
+
+    mongo_client = MongoClient(mongo_uri, serverSelectionTimeoutMS=10000)
+    mongo_db = mongo_client[db_name]
 
 
 def create_app():
     """Application factory pattern."""
-    app = Flask(__name__,
-                template_folder='templates',
-                static_folder='app/static')
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    app = Flask(
+        __name__,
+        template_folder=os.path.join(project_root, 'templates'),
+        static_folder=os.path.join(os.path.dirname(__file__), 'static')
+    )
 
     # ── Configuration ─────────────────────────────────────────────────────────
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-change-me')
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///websecure.db')
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
@@ -46,7 +67,7 @@ def create_app():
     app.config['SCHEDULER_API_ENABLED'] = False
 
     # ── Initialize extensions ─────────────────────────────────────────────────
-    db.init_app(app)
+    init_mongo(app)
     login_manager.init_app(app)
     mail.init_app(app)
 
@@ -61,8 +82,7 @@ def create_app():
     def inject_alert_count():
         if current_user.is_authenticated:
             from app.models.models import Alert
-            count = Alert.query.filter_by(
-                user_id=current_user.id, is_read=False).count()
+            count = Alert.count_unread(current_user.id)
             return {'unread_alert_count': count}
         return {'unread_alert_count': 0}
 
@@ -81,9 +101,10 @@ def create_app():
     app.register_blueprint(reports_bp)
     app.register_blueprint(api_bp, url_prefix='/api')
 
-    # ── Create database tables ────────────────────────────────────────────────
+    # ── Ensure database indexes ───────────────────────────────────────────────
     with app.app_context():
-        db.create_all()
+        from app.models.models import ensure_indexes
+        ensure_indexes()
 
     # ── Start scheduler ───────────────────────────────────────────────────────
     if not scheduler.running:

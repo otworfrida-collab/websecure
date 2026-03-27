@@ -30,7 +30,7 @@ def auto_scan_all_websites():
     app = create_app()
     with app.app_context():
         from app.scanner.runner import run_scan
-        sites = Website.query.filter_by(auto_scan=True).all()
+        sites = Website.all_auto_scan()
         logger.info(f'Auto-scan: processing {len(sites)} website(s).')
         for site in sites:
             try:

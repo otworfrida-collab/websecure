@@ -6,7 +6,6 @@ Handles user registration, login, and logout with bcrypt password hashing.
 import bcrypt
 from flask import Blueprint, render_template, redirect, url_for, flash, request, session
 from flask_login import login_user, logout_user, login_required, current_user
-from app import db
 from app.models.models import User
 
 auth_bp = Blueprint('auth', __name__)
@@ -40,9 +39,9 @@ def register():
             errors.append('Password must be at least 8 characters.')
         if password != confirm:
             errors.append('Passwords do not match.')
-        if User.query.filter_by(username=username).first():
+        if User.find_by_username(username):
             errors.append('Username already taken.')
-        if User.query.filter_by(email=email).first():
+        if User.find_by_email(email):
             errors.append('An account with that email already exists.')
 
         if errors:
@@ -53,9 +52,7 @@ def register():
 
         # --- Create user with bcrypt hash ---
         pw_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-        user = User(username=username, email=email, password_hash=pw_hash)
-        db.session.add(user)
-        db.session.commit()
+        User.create(username=username, email=email, password_hash=pw_hash)
 
         flash('Account created! Please log in.', 'success')
         return redirect(url_for('auth.login'))
@@ -73,7 +70,7 @@ def login():
         password = request.form.get('password', '')
         remember = bool(request.form.get('remember'))
 
-        user = User.query.filter_by(email=email).first()
+        user = User.find_by_email(email)
 
         if user and bcrypt.checkpw(password.encode('utf-8'),
                                     user.password_hash.encode('utf-8')):

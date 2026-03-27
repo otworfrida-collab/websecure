@@ -30,11 +30,13 @@ C_WHITE  = colors.white
 @reports_bp.route('/scans/<int:scan_id>/report.pdf')
 @login_required
 def download_report(scan_id):
-    scan = Scan.query.get_or_404(scan_id)
-    site = Website.query.filter_by(id=scan.website_id,
-                                    user_id=current_user.id).first_or_404()
-    vulns = Vulnerability.query.filter_by(scan_id=scan_id)\
-                               .order_by(Vulnerability.severity_score.desc()).all()
+    scan = Scan.find_by_id(scan_id)
+    if not scan:
+        abort(404)
+    site = Website.find_by_user_and_id(current_user.id, scan.website_id)
+    if not site:
+        abort(404)
+    vulns = Vulnerability.for_scan(scan_id)
 
     pdf_buffer = _build_pdf(scan, site, vulns)
     filename = f'websecure-report-{site.url.replace("https://","").replace("http://","").split("/")[0]}-{scan.scan_date.strftime("%Y%m%d")}.pdf'

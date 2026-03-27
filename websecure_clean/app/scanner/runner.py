@@ -5,8 +5,7 @@ creates alerts, and triggers email notifications.
 """
 
 import logging
-from datetime import datetime
-from app import db, mail
+from app import mail
 from app.models.models import Scan, Vulnerability, Alert, Website, User
 from app.scanner.engine import VulnerabilityScanner
 from flask_mail import Message
@@ -21,13 +20,7 @@ def run_scan(website: Website) -> Scan:
     Returns the completed Scan record.
     """
     # Create scan record (status=running)
-    scan = Scan(
-        website_id=website.id,
-        scan_date=datetime.utcnow(),
-        status='running'
-    )
-    db.session.add(scan)
-    db.session.commit()
+    scan = Scan.create_running(website.id)
 
     try:
         # Run the scanner engine
@@ -35,34 +28,17 @@ def run_scan(website: Website) -> Scan:
         result = scanner.run()
 
         # Persist vulnerability findings
-        for finding in result['findings']:
-            vuln = Vulnerability(
-                scan_id=scan.id,
-                vulnerability_type=finding['vulnerability_type'],
-                risk_level=finding['risk_level'],
-                description=finding['description'],
-                recommendation=finding['recommendation'],
-                evidence=finding['evidence'],
-                severity_score=finding['severity_score'],
-            )
-            db.session.add(vuln)
+        Vulnerability.create_many(scan.id, result['findings'])
 
         # Update scan record
-        scan.status         = 'done'
-        scan.result_summary = result['summary']
-        scan.total_vulns    = result['total_vulns']
-        scan.risk_score     = result['risk_score']
-        scan.duration_secs  = result['duration']
-        db.session.commit()
+        scan.update_result(result)
 
         # Create alerts for high and medium findings
         _create_alerts(scan, website, result['findings'])
 
     except Exception as e:
         logger.error(f'Scan failed for {website.url}: {e}')
-        scan.status = 'failed'
-        scan.result_summary = f'Scan failed: {str(e)}'
-        db.session.commit()
+        scan.mark_failed(f'Scan failed: {str(e)}')
 
     return scan
 
@@ -73,7 +49,7 @@ def _create_alerts(scan: Scan, website: Website, findings: list):
     if not high_findings:
         return
 
-    user = User.query.get(website.user_id)
+    user = User.find_by_id(website.user_id)
     if not user:
         return
 
@@ -83,14 +59,12 @@ def _create_alerts(scan: Scan, website: Website, findings: list):
         f'including {len(high_findings)} HIGH severity finding(s). '
         f'Please review your scan report.'
     )
-    alert = Alert(
+    Alert.create(
         user_id=user.id,
         scan_id=scan.id,
         message=message,
-        alert_type='dashboard'
+        alert_type='dashboard',
     )
-    db.session.add(alert)
-    db.session.commit()
 
     # Email alert (best-effort)
     try:

@@ -1,135 +1,354 @@
 """
-WebSecure Database Models
-Defines Users, Websites, Scans, Vulnerabilities, and Alerts tables.
+WebSecure MongoDB Models
+Stores users, websites, scans, vulnerabilities, and alerts in MongoDB.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
 from flask_login import UserMixin
-from app import db, login_manager
+from pymongo import ReturnDocument
+
+import app as app_module
+from app import login_manager
 
 
-# ── User loader for Flask-Login ───────────────────────────────────────────────
+def _now() -> datetime:
+    return datetime.utcnow()
+
+
+def _col(name: str):
+    if app_module.mongo_db is None:
+        raise RuntimeError('MongoDB is not initialized. Check MONGODB_URI and app startup.')
+    return app_module.mongo_db[name]
+
+
+def _next_id(counter_name: str) -> int:
+    doc = _col("counters").find_one_and_update(
+        {"_id": counter_name},
+        {"$inc": {"seq": 1}},
+        upsert=True,
+        return_document=ReturnDocument.AFTER,
+    )
+    return int(doc["seq"])
+
+
+class BaseDoc:
+    def __init__(self, data: Dict[str, Any]):
+        self._data = data
+
+    def __getattr__(self, item: str):
+        if item in self._data:
+            return self._data[item]
+        raise AttributeError(item)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return dict(self._data)
+
+
 @login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
+def load_user(user_id: str):
+    try:
+        return User.find_by_id(int(user_id))
+    except (TypeError, ValueError):
+        return None
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-# USER MODEL
-# ═════════════════════════════════════════════════════════════════════════════
-class User(UserMixin, db.Model):
-    """Registered user account."""
-    __tablename__ = 'users'
+class User(UserMixin, BaseDoc):
+    @property
+    def is_active(self):
+        return bool(self._data.get("is_active", True))
 
-    id            = db.Column(db.Integer, primary_key=True)
-    username      = db.Column(db.String(80),  unique=True, nullable=False)
-    email         = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(256), nullable=False)
-    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
-    is_active     = db.Column(db.Boolean, default=True)
+    def get_id(self):
+        return str(self.id)
 
-    # Relationships
-    websites = db.relationship('Website', backref='owner', lazy=True,
-                               cascade='all, delete-orphan')
+    @staticmethod
+    def find_by_id(user_id: int) -> Optional["User"]:
+        doc = _col("users").find_one({"id": user_id})
+        return User(doc) if doc else None
 
-    def __repr__(self):
-        return f'<User {self.username}>'
+    @staticmethod
+    def find_by_email(email: str) -> Optional["User"]:
+        doc = _col("users").find_one({"email": email})
+        return User(doc) if doc else None
+
+    @staticmethod
+    def find_by_username(username: str) -> Optional["User"]:
+        doc = _col("users").find_one({"username": username})
+        return User(doc) if doc else None
+
+    @staticmethod
+    def create(username: str, email: str, password_hash: str) -> "User":
+        doc = {
+            "id": _next_id("users"),
+            "username": username,
+            "email": email,
+            "password_hash": password_hash,
+            "created_at": _now(),
+            "is_active": True,
+        }
+        _col("users").insert_one(doc)
+        return User(doc)
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-# WEBSITE MODEL
-# ═════════════════════════════════════════════════════════════════════════════
-class Website(db.Model):
-    """A website URL added by a user for monitoring."""
-    __tablename__ = 'websites'
+class Website(BaseDoc):
+    @staticmethod
+    def create(user_id: int, url: str, label: str, auto_scan: bool) -> "Website":
+        doc = {
+            "id": _next_id("websites"),
+            "user_id": user_id,
+            "url": url,
+            "label": label,
+            "date_added": _now(),
+            "auto_scan": auto_scan,
+        }
+        _col("websites").insert_one(doc)
+        return Website(doc)
 
-    id         = db.Column(db.Integer, primary_key=True)
-    user_id    = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    url        = db.Column(db.String(512), nullable=False)
-    label      = db.Column(db.String(128), nullable=True)   # friendly name
-    date_added = db.Column(db.DateTime, default=datetime.utcnow)
-    auto_scan  = db.Column(db.Boolean, default=True)        # enable scheduled scans
+    @staticmethod
+    def find_by_id(site_id: int) -> Optional["Website"]:
+        doc = _col("websites").find_one({"id": site_id})
+        return Website(doc) if doc else None
 
-    # Relationships
-    scans = db.relationship('Scan', backref='website', lazy=True,
-                            cascade='all, delete-orphan')
+    @staticmethod
+    def find_by_user_and_id(user_id: int, site_id: int) -> Optional["Website"]:
+        doc = _col("websites").find_one({"id": site_id, "user_id": user_id})
+        return Website(doc) if doc else None
+
+    @staticmethod
+    def find_by_user_and_url(user_id: int, url: str) -> Optional["Website"]:
+        doc = _col("websites").find_one({"user_id": user_id, "url": url})
+        return Website(doc) if doc else None
+
+    @staticmethod
+    def for_user(user_id: int) -> List["Website"]:
+        docs = _col("websites").find({"user_id": user_id}).sort("date_added", -1)
+        return [Website(d) for d in docs]
+
+    @staticmethod
+    def all_auto_scan() -> List["Website"]:
+        docs = _col("websites").find({"auto_scan": True})
+        return [Website(d) for d in docs]
+
+    def save(self):
+        _col("websites").update_one(
+            {"id": self.id},
+            {"$set": {
+                "url": self.url,
+                "label": self.label,
+                "auto_scan": self.auto_scan,
+            }}
+        )
+
+    def delete(self):
+        scan_ids = [s.id for s in Scan.for_website(self.id)]
+        if scan_ids:
+            _col("vulnerabilities").delete_many({"scan_id": {"$in": scan_ids}})
+            _col("alerts").delete_many({"scan_id": {"$in": scan_ids}})
+            _col("scans").delete_many({"id": {"$in": scan_ids}})
+        _col("websites").delete_one({"id": self.id})
 
     def latest_scan(self):
-        return Scan.query.filter_by(website_id=self.id)\
-                         .order_by(Scan.scan_date.desc()).first()
-
-    def __repr__(self):
-        return f'<Website {self.url}>'
+        scans = Scan.for_website(self.id, limit=1)
+        return scans[0] if scans else None
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-# SCAN MODEL
-# ═════════════════════════════════════════════════════════════════════════════
-class Scan(db.Model):
-    """A single vulnerability scan run against a website."""
-    __tablename__ = 'scans'
+class Scan(BaseDoc):
+    @staticmethod
+    def create_running(website_id: int) -> "Scan":
+        doc = {
+            "id": _next_id("scans"),
+            "website_id": website_id,
+            "scan_date": _now(),
+            "status": "running",
+            "result_summary": "",
+            "total_vulns": 0,
+            "risk_score": 0.0,
+            "duration_secs": 0.0,
+        }
+        _col("scans").insert_one(doc)
+        return Scan(doc)
 
-    id             = db.Column(db.Integer, primary_key=True)
-    website_id     = db.Column(db.Integer, db.ForeignKey('websites.id'), nullable=False)
-    scan_date      = db.Column(db.DateTime, default=datetime.utcnow)
-    status         = db.Column(db.String(20), default='pending')   # pending|running|done|failed
-    result_summary = db.Column(db.Text, nullable=True)
-    total_vulns    = db.Column(db.Integer, default=0)
-    risk_score     = db.Column(db.Float,   default=0.0)   # 0–100 composite score
-    duration_secs  = db.Column(db.Float,   default=0.0)
+    @staticmethod
+    def find_by_id(scan_id: int) -> Optional["Scan"]:
+        doc = _col("scans").find_one({"id": scan_id})
+        return Scan(doc) if doc else None
 
-    # Relationships
-    vulnerabilities = db.relationship('Vulnerability', backref='scan', lazy=True,
-                                      cascade='all, delete-orphan')
+    @staticmethod
+    def for_website(website_id: int, limit: Optional[int] = None) -> List["Scan"]:
+        cursor = _col("scans").find({"website_id": website_id}).sort("scan_date", -1)
+        if limit:
+            cursor = cursor.limit(limit)
+        return [Scan(d) for d in cursor]
+
+    @staticmethod
+    def for_websites(website_ids: List[int], limit: Optional[int] = None) -> List["Scan"]:
+        if not website_ids:
+            return []
+        cursor = _col("scans").find({"website_id": {"$in": website_ids}}).sort("scan_date", -1)
+        if limit:
+            cursor = cursor.limit(limit)
+        return [Scan(d) for d in cursor]
+
+    @property
+    def website(self):
+        return Website.find_by_id(self.website_id)
+
+    def update_result(self, result: Dict[str, Any]):
+        self._data.update({
+            "status": "done",
+            "result_summary": result["summary"],
+            "total_vulns": int(result["total_vulns"]),
+            "risk_score": float(result["risk_score"]),
+            "duration_secs": float(result["duration"]),
+        })
+        _col("scans").update_one(
+            {"id": self.id},
+            {"$set": {
+                "status": self.status,
+                "result_summary": self.result_summary,
+                "total_vulns": self.total_vulns,
+                "risk_score": self.risk_score,
+                "duration_secs": self.duration_secs,
+            }}
+        )
+
+    def mark_failed(self, message: str):
+        self._data["status"] = "failed"
+        self._data["result_summary"] = message
+        _col("scans").update_one(
+            {"id": self.id},
+            {"$set": {"status": "failed", "result_summary": message}}
+        )
 
     def vuln_counts(self):
-        """Return dict with counts per risk level."""
-        counts = {'High': 0, 'Medium': 0, 'Low': 0}
-        for v in self.vulnerabilities:
-            counts[v.risk_level] = counts.get(v.risk_level, 0) + 1
+        return Vulnerability.counts_for_scan(self.id)
+
+
+class Vulnerability(BaseDoc):
+    @staticmethod
+    def create_many(scan_id: int, findings: List[Dict[str, Any]]):
+        docs = []
+        for finding in findings:
+            docs.append({
+                "id": _next_id("vulnerabilities"),
+                "scan_id": scan_id,
+                "vulnerability_type": finding["vulnerability_type"],
+                "risk_level": finding["risk_level"],
+                "description": finding["description"],
+                "recommendation": finding.get("recommendation") or "",
+                "evidence": finding.get("evidence") or "",
+                "severity_score": float(finding.get("severity_score", 0.0)),
+            })
+        if docs:
+            _col("vulnerabilities").insert_many(docs)
+
+    @staticmethod
+    def for_scan(scan_id: int) -> List["Vulnerability"]:
+        docs = _col("vulnerabilities").find({"scan_id": scan_id}).sort("severity_score", -1)
+        return [Vulnerability(d) for d in docs]
+
+    @staticmethod
+    def count_for_scans(scan_ids: List[int]) -> int:
+        if not scan_ids:
+            return 0
+        return _col("vulnerabilities").count_documents({"scan_id": {"$in": scan_ids}})
+
+    @staticmethod
+    def count_by_risk_for_scans(scan_ids: List[int], risk_level: str) -> int:
+        if not scan_ids:
+            return 0
+        return _col("vulnerabilities").count_documents({
+            "scan_id": {"$in": scan_ids},
+            "risk_level": risk_level,
+        })
+
+    @staticmethod
+    def counts_for_scan(scan_id: int):
+        counts = {"High": 0, "Medium": 0, "Low": 0}
+        pipeline = [
+            {"$match": {"scan_id": scan_id}},
+            {"$group": {"_id": "$risk_level", "count": {"$sum": 1}}},
+        ]
+        for row in _col("vulnerabilities").aggregate(pipeline):
+            level = row.get("_id")
+            if level in counts:
+                counts[level] = int(row.get("count", 0))
         return counts
 
-    def __repr__(self):
-        return f'<Scan {self.id} website={self.website_id} {self.status}>'
+    @staticmethod
+    def counts_for_scans(scan_ids: List[int]):
+        counts = {"High": 0, "Medium": 0, "Low": 0}
+        if not scan_ids:
+            return counts
+        pipeline = [
+            {"$match": {"scan_id": {"$in": scan_ids}}},
+            {"$group": {"_id": "$risk_level", "count": {"$sum": 1}}},
+        ]
+        for row in _col("vulnerabilities").aggregate(pipeline):
+            level = row.get("_id")
+            if level in counts:
+                counts[level] = int(row.get("count", 0))
+        return counts
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-# VULNERABILITY MODEL
-# ═════════════════════════════════════════════════════════════════════════════
-class Vulnerability(db.Model):
-    """A single vulnerability finding within a scan."""
-    __tablename__ = 'vulnerabilities'
+class Alert(BaseDoc):
+    @staticmethod
+    def create(user_id: int, scan_id: int, message: str, alert_type: str = "dashboard"):
+        doc = {
+            "id": _next_id("alerts"),
+            "user_id": user_id,
+            "scan_id": scan_id,
+            "message": message,
+            "is_read": False,
+            "created_at": _now(),
+            "alert_type": alert_type,
+        }
+        _col("alerts").insert_one(doc)
+        return Alert(doc)
 
-    id               = db.Column(db.Integer, primary_key=True)
-    scan_id          = db.Column(db.Integer, db.ForeignKey('scans.id'), nullable=False)
-    vulnerability_type = db.Column(db.String(128), nullable=False)
-    risk_level       = db.Column(db.String(20),  nullable=False)   # Low|Medium|High
-    description      = db.Column(db.Text,         nullable=False)
-    recommendation   = db.Column(db.Text,         nullable=True)
-    evidence         = db.Column(db.Text,         nullable=True)   # raw detail / header value
-    severity_score   = db.Column(db.Float,        default=0.0)     # 1–10
+    @staticmethod
+    def count_unread(user_id: int) -> int:
+        return _col("alerts").count_documents({"user_id": user_id, "is_read": False})
 
-    def __repr__(self):
-        return f'<Vulnerability {self.vulnerability_type} [{self.risk_level}]>'
+    @staticmethod
+    def recent_for_user(user_id: int, limit: int = 5) -> List["Alert"]:
+        docs = _col("alerts").find({"user_id": user_id}).sort("created_at", -1).limit(limit)
+        return [Alert(d) for d in docs]
+
+    @staticmethod
+    def mark_all_read(user_id: int):
+        _col("alerts").update_many({"user_id": user_id, "is_read": False}, {"$set": {"is_read": True}})
+
+    @staticmethod
+    def mark_read(user_id: int, alert_id: int) -> bool:
+        res = _col("alerts").update_one(
+            {"user_id": user_id, "id": alert_id},
+            {"$set": {"is_read": True}}
+        )
+        return res.matched_count > 0
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-# ALERT MODEL
-# ═════════════════════════════════════════════════════════════════════════════
-class Alert(db.Model):
-    """Notification record sent to a user about a vulnerability finding."""
-    __tablename__ = 'alerts'
+def ensure_indexes():
+    _col("users").create_index("id", unique=True)
+    _col("users").create_index("username", unique=True)
+    _col("users").create_index("email", unique=True)
 
-    id         = db.Column(db.Integer, primary_key=True)
-    user_id    = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    scan_id    = db.Column(db.Integer, db.ForeignKey('scans.id'), nullable=False)
-    message    = db.Column(db.Text,    nullable=False)
-    is_read    = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    alert_type = db.Column(db.String(20), default='dashboard')  # dashboard|email
+    _col("websites").create_index("id", unique=True)
+    _col("websites").create_index([("user_id", 1), ("url", 1)], unique=True)
+    _col("websites").create_index("user_id")
 
-    user = db.relationship('User',  backref='alerts')
-    scan = db.relationship('Scan',  backref='alerts')
+    _col("scans").create_index("id", unique=True)
+    _col("scans").create_index("website_id")
+    _col("scans").create_index("scan_date")
 
-    def __repr__(self):
-        return f'<Alert user={self.user_id} scan={self.scan_id}>'
+    _col("vulnerabilities").create_index("id", unique=True)
+    _col("vulnerabilities").create_index("scan_id")
+    _col("vulnerabilities").create_index("risk_level")
+
+    _col("alerts").create_index("id", unique=True)
+    _col("alerts").create_index("user_id")
+    _col("alerts").create_index("scan_id")
+    _col("alerts").create_index("created_at")

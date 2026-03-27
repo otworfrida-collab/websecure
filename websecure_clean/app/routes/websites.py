@@ -3,9 +3,8 @@ WebSecure Website Management Routes
 Add, view, and delete monitored websites.
 """
 
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, abort
 from flask_login import login_required, current_user
-from app import db
 from app.models.models import Website
 
 websites_bp = Blueprint('websites', __name__)
@@ -14,8 +13,7 @@ websites_bp = Blueprint('websites', __name__)
 @websites_bp.route('/websites')
 @login_required
 def list_websites():
-    websites = Website.query.filter_by(user_id=current_user.id)\
-                            .order_by(Website.date_added.desc()).all()
+    websites = Website.for_user(current_user.id)
     return render_template('websites/list.html', websites=websites)
 
 
@@ -36,19 +34,17 @@ def add_website():
             url = 'https://' + url
 
         # Prevent duplicates per user
-        existing = Website.query.filter_by(user_id=current_user.id, url=url).first()
+        existing = Website.find_by_user_and_url(current_user.id, url)
         if existing:
             flash('You are already monitoring that URL.', 'warning')
             return redirect(url_for('websites.list_websites'))
 
-        site = Website(
+        Website.create(
             user_id=current_user.id,
             url=url,
             label=label or url,
-            auto_scan=auto
+            auto_scan=auto,
         )
-        db.session.add(site)
-        db.session.commit()
         flash(f'Website "{url}" added successfully.', 'success')
         return redirect(url_for('websites.list_websites'))
 
@@ -58,9 +54,10 @@ def add_website():
 @websites_bp.route('/websites/<int:site_id>/delete', methods=['POST'])
 @login_required
 def delete_website(site_id):
-    site = Website.query.filter_by(id=site_id, user_id=current_user.id).first_or_404()
-    db.session.delete(site)
-    db.session.commit()
+    site = Website.find_by_user_and_id(current_user.id, site_id)
+    if not site:
+        abort(404)
+    site.delete()
     flash('Website removed.', 'info')
     return redirect(url_for('websites.list_websites'))
 
@@ -68,9 +65,11 @@ def delete_website(site_id):
 @websites_bp.route('/websites/<int:site_id>/toggle-auto', methods=['POST'])
 @login_required
 def toggle_auto_scan(site_id):
-    site = Website.query.filter_by(id=site_id, user_id=current_user.id).first_or_404()
+    site = Website.find_by_user_and_id(current_user.id, site_id)
+    if not site:
+        abort(404)
     site.auto_scan = not site.auto_scan
-    db.session.commit()
+    site.save()
     state = 'enabled' if site.auto_scan else 'disabled'
     flash(f'Automatic scanning {state} for {site.url}.', 'info')
     return redirect(url_for('websites.list_websites'))
